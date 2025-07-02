@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Search, User, Eye, MapPin, Target, TrendingUp, AlertCircle, CheckCircle, Zap, Shield, Sun, Play, Pause, SkipBack, SkipForward, Clock, Users, Calendar } from 'lucide-react';
+import { Search, User, Eye, MapPin, Target, TrendingUp, AlertCircle, CheckCircle, Zap, Shield, Sun, Clock, Users, Calendar, Crown, Flame } from 'lucide-react';
 import { getMapInfo, gameToMapCoordinates, preloadMapImage, MapInfo } from '@/lib/data-dragon';
 
 interface WardEvent {
@@ -15,9 +15,19 @@ interface WardEvent {
   teamId: number;
 }
 
+interface ObjectiveEvent {
+  type: 'BUILDING_KILL' | 'ELITE_MONSTER_KILL' | 'CHAMPION_KILL';
+  timestamp: number;
+  position?: { x: number; y: number };
+  monsterType?: string;
+  buildingType?: string;
+  teamId: number;
+  participantId?: number;
+}
+
 interface TimelineFrame {
   timestamp: number;
-  events: WardEvent[];
+  events: (WardEvent | ObjectiveEvent)[];
 }
 
 interface MatchTimelineData {
@@ -25,7 +35,14 @@ interface MatchTimelineData {
   mapId: number;
   frames: TimelineFrame[];
   wardEvents: WardEvent[];
+  objectiveEvents: ObjectiveEvent[];
   gameDuration: number;
+  participants: Array<{
+    participantId: number;
+    summonerName: string;
+    teamId: number;
+    championName: string;
+  }>;
 }
 
 interface MatchHistoryItem {
@@ -63,10 +80,12 @@ export default function VisionLab() {
   const [matchHistory, setMatchHistory] = useState<MatchHistoryItem[]>([]);
   const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
   
+  // Player info
+  const [searchedPlayerPuuid, setSearchedPlayerPuuid] = useState<string | null>(null);
+  const [playerTeamId, setPlayerTeamId] = useState<number | null>(null);
+  
   // Time control
   const [currentTime, setCurrentTime] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
   
   // Vision state
   const [activeWards, setActiveWards] = useState<ActiveWard[]>([]);
@@ -98,34 +117,20 @@ export default function VisionLab() {
     loadDefaultMap();
   }, []);
 
-  // Time control effect
-  useEffect(() => {
-    if (!isPlaying || !timelineData) return;
-
-    const interval = setInterval(() => {
-      setCurrentTime(prev => {
-        const next = prev + (1000 * playbackSpeed);
-        if (next >= timelineData.gameDuration) {
-          setIsPlaying(false);
-          return timelineData.gameDuration;
-        }
-        return next;
-      });
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [isPlaying, playbackSpeed, timelineData]);
-
-  // Update active wards based on current time
+  // Update active wards based on current time - with better logic
   useEffect(() => {
     if (!timelineData) return;
 
     const newActiveWards: ActiveWard[] = [];
+    const wardLifeMap = new Map<string, ActiveWard>();
     
-    timelineData.wardEvents.forEach((event, index) => {
-      if (event.timestamp > currentTime) return;
+    // Process all ward events chronologically up to current time
+    const relevantEvents = timelineData.wardEvents
+      .filter(event => event.timestamp <= currentTime)
+      .sort((a, b) => a.timestamp - b.timestamp);
 
-      const wardId = `${event.position.x}-${event.position.y}-${event.timestamp}`;
+    for (const event of relevantEvents) {
+      const wardKey = `${event.position.x}-${event.position.y}`;
       
       if (event.type === 'WARD_PLACED') {
         // Calculate expiration time based on ward type
@@ -144,19 +149,12 @@ export default function VisionLab() {
             expiresAt = event.timestamp + 180000; // 3 minutes default
         }
 
-        // Check if ward is still active
+        // Check if ward is still active (not expired)
         const isExpired = expiresAt && currentTime > expiresAt;
-        const isKilled = timelineData.wardEvents.some(e => 
-          e.type === 'WARD_KILL' && 
-          e.position.x === event.position.x && 
-          e.position.y === event.position.y &&
-          e.timestamp <= currentTime &&
-          e.timestamp > event.timestamp
-        );
-
-        if (!isExpired && !isKilled) {
-          newActiveWards.push({
-            id: wardId,
+        
+        if (!isExpired) {
+          wardLifeMap.set(wardKey, {
+            id: `${wardKey}-${event.timestamp}`,
             type: event.wardType,
             position: event.position,
             teamId: event.teamId,
@@ -165,10 +163,14 @@ export default function VisionLab() {
             isActive: true
           });
         }
+      } else if (event.type === 'WARD_KILL') {
+        // Remove ward from map when killed
+        wardLifeMap.delete(wardKey);
       }
-    });
+    }
 
-    setActiveWards(newActiveWards);
+    // Convert map to array
+    setActiveWards(Array.from(wardLifeMap.values()));
   }, [currentTime, timelineData]);
 
   const handleSearch = async () => {
@@ -187,46 +189,51 @@ export default function VisionLab() {
         return;
       }
 
+      setSearchedPlayerPuuid(summonerResult.puuid);
+
       // Get match history
       const matchesResponse = await fetch(`/api/matches/${region}/${summonerResult.puuid}?count=10`);
       const matchesResult = await matchesResponse.json();
 
       if (matchesResult.error || !matchesResult.matchIds?.length) {
-        // Generate mock match history
-        generateMockMatchHistory();
+        // Generate mock match history with player info
+        generateMockMatchHistory(summonerResult.name || summonerName);
       } else {
         // Process real match history (would need additional API calls)
-        generateMockMatchHistory();
+        generateMockMatchHistory(summonerResult.name || summonerName);
       }
 
     } catch (error) {
       console.error('Error fetching summoner data:', error);
-      generateMockMatchHistory();
+      generateMockMatchHistory(summonerName);
     } finally {
       setLoading(false);
     }
   };
 
-  const generateMockMatchHistory = () => {
-    const mockMatches: MatchHistoryItem[] = Array.from({ length: 5 }, (_, i) => ({
-      matchId: `JP1_${Date.now() - i * 1000000}`,
-      gameCreation: Date.now() - i * 3600000, // Each game 1 hour apart
-      gameDuration: 1800000 + Math.random() * 600000, // 30-40 minutes
-      gameMode: 'CLASSIC',
-      mapId: 11,
-      participants: [
-        { championName: 'Yasuo', summonerName: 'Player1', teamId: 100 },
-        { championName: 'Jinx', summonerName: 'Player2', teamId: 100 },
-        { championName: 'Thresh', summonerName: 'Player3', teamId: 100 },
-        { championName: 'Lee Sin', summonerName: 'Player4', teamId: 100 },
-        { championName: 'Ahri', summonerName: 'Player5', teamId: 100 },
-        { championName: 'Garen', summonerName: 'Enemy1', teamId: 200 },
-        { championName: 'Ashe', summonerName: 'Enemy2', teamId: 200 },
-        { championName: 'Leona', summonerName: 'Enemy3', teamId: 200 },
-        { championName: 'Graves', summonerName: 'Enemy4', teamId: 200 },
-        { championName: 'Zed', summonerName: 'Enemy5', teamId: 200 },
-      ]
-    }));
+  const generateMockMatchHistory = (playerName: string) => {
+    const mockMatches: MatchHistoryItem[] = Array.from({ length: 5 }, (_, i) => {
+      const playerTeam = Math.random() > 0.5 ? 100 : 200;
+      return {
+        matchId: `JP1_${Date.now() - i * 1000000}`,
+        gameCreation: Date.now() - i * 3600000, // Each game 1 hour apart
+        gameDuration: 1800000 + Math.random() * 600000, // 30-40 minutes
+        gameMode: 'CLASSIC',
+        mapId: 11,
+        participants: [
+          { championName: 'Yasuo', summonerName: playerTeam === 100 ? playerName : 'Player1', teamId: 100 },
+          { championName: 'Jinx', summonerName: playerTeam === 100 && i === 1 ? playerName : 'Player2', teamId: 100 },
+          { championName: 'Thresh', summonerName: playerTeam === 100 && i === 2 ? playerName : 'Player3', teamId: 100 },
+          { championName: 'Lee Sin', summonerName: playerTeam === 100 && i === 3 ? playerName : 'Player4', teamId: 100 },
+          { championName: 'Ahri', summonerName: playerTeam === 100 && i === 4 ? playerName : 'Player5', teamId: 100 },
+          { championName: 'Garen', summonerName: playerTeam === 200 ? playerName : 'Enemy1', teamId: 200 },
+          { championName: 'Ashe', summonerName: playerTeam === 200 && i === 1 ? playerName : 'Enemy2', teamId: 200 },
+          { championName: 'Leona', summonerName: playerTeam === 200 && i === 2 ? playerName : 'Enemy3', teamId: 200 },
+          { championName: 'Graves', summonerName: playerTeam === 200 && i === 3 ? playerName : 'Enemy4', teamId: 200 },
+          { championName: 'Zed', summonerName: playerTeam === 200 && i === 4 ? playerName : 'Enemy5', teamId: 200 },
+        ]
+      };
+    });
 
     setMatchHistory(mockMatches);
     if (mockMatches.length > 0) {
@@ -249,7 +256,16 @@ export default function VisionLab() {
 
       setTimelineData(timeline);
       setCurrentTime(0);
-      setIsPlaying(false);
+
+      // Find player's team from participants
+      if (searchedPlayerPuuid && timeline.participants) {
+        const playerParticipant = timeline.participants.find((p: any) => 
+          p.summonerName.toLowerCase() === summonerName.toLowerCase()
+        );
+        if (playerParticipant) {
+          setPlayerTeamId(playerParticipant.teamId);
+        }
+      }
 
       // Load appropriate map
       if (timeline.mapId !== mapInfo?.mapId) {
@@ -274,7 +290,10 @@ export default function VisionLab() {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  // Fix filtering logic to ensure all wards are displayed correctly
   const filteredWards = useMemo(() => {
+    if (!activeWards || activeWards.length === 0) return [];
+    
     return activeWards.filter(ward => {
       const teamMatch = teamFilter === 'all' || ward.teamId === teamFilter;
       const typeMatch = wardTypeFilter.includes(ward.type);
@@ -283,7 +302,6 @@ export default function VisionLab() {
   }, [activeWards, teamFilter, wardTypeFilter]);
 
   const getWardColor = (wardType: string, teamId: number) => {
-    const baseColor = teamId === 100 ? 'blue' : 'red';
     switch (wardType) {
       case 'CONTROL_WARD':
         return teamId === 100 ? 'bg-pink-500' : 'bg-pink-700';
@@ -301,6 +319,21 @@ export default function VisionLab() {
       default: return <Eye className="w-2 h-2 text-white" />;
     }
   };
+
+  const getObjectiveIcon = (monsterType: string) => {
+    switch (monsterType) {
+      case 'BARON': return <Crown className="w-3 h-3 text-purple-400" />;
+      case 'DRAGON': return <Flame className="w-3 h-3 text-red-400" />;
+      case 'RIFTHERALD': return <Shield className="w-3 h-3 text-blue-400" />;
+      default: return <Target className="w-3 h-3 text-gray-400" />;
+    }
+  };
+
+  // Get objectives that occurred at current time or before
+  const currentObjectives = useMemo(() => {
+    if (!timelineData) return [];
+    return timelineData.objectiveEvents.filter(obj => obj.timestamp <= currentTime);
+  }, [timelineData, currentTime]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -372,13 +405,28 @@ export default function VisionLab() {
           {/* Demo Button */}
           <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
             <button
-              onClick={generateMockMatchHistory}
+              onClick={() => generateMockMatchHistory('DemoPlayer')}
               className="px-4 py-2 text-sm bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-lg transition-colors"
             >
               🎮 デモデータで試す
             </button>
           </div>
         </div>
+
+        {/* Player Team Info */}
+        {playerTeamId && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-md border border-gray-200 dark:border-gray-700 mb-8">
+            <div className="flex items-center justify-center space-x-3">
+              <Users className="w-5 h-5 text-gray-500" />
+              <span className="text-gray-700 dark:text-gray-300">あなたのチーム:</span>
+              <span className={`px-3 py-1 rounded-full text-white font-medium ${
+                playerTeamId === 100 ? 'bg-blue-500' : 'bg-red-500'
+              }`}>
+                {playerTeamId === 100 ? '青チーム (100)' : '赤チーム (200)'}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Error Display */}
         {error && (
@@ -424,7 +472,7 @@ export default function VisionLab() {
                           key={i}
                           className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium text-white ${
                             participant.teamId === 100 ? 'bg-blue-500' : 'bg-red-500'
-                          }`}
+                          } ${participant.summonerName === summonerName ? 'ring-2 ring-yellow-400' : ''}`}
                           title={`${participant.championName} (${participant.summonerName})`}
                         >
                           {participant.championName.charAt(0)}
@@ -448,47 +496,18 @@ export default function VisionLab() {
                 <span>リアルタイム視界マップ</span>
               </h2>
               
-              {/* Time Controls */}
+              {/* Simple Timeline Bar */}
               <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center space-x-3">
-                    <button
-                      onClick={() => setIsPlaying(!isPlaying)}
-                      className="p-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg"
-                    >
-                      {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                    </button>
-                    <button
-                      onClick={() => setCurrentTime(Math.max(0, currentTime - 30000))}
-                      className="p-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg"
-                    >
-                      <SkipBack className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setCurrentTime(Math.min(timelineData.gameDuration, currentTime + 30000))}
-                      className="p-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg"
-                    >
-                      <SkipForward className="w-4 h-4" />
-                    </button>
-                  </div>
-                  
                   <div className="flex items-center space-x-3">
                     <Clock className="w-4 h-4 text-gray-500" />
                     <span className="font-mono text-lg">{formatTime(currentTime)}</span>
                     <span className="text-gray-500">/</span>
                     <span className="font-mono text-gray-500">{formatTime(timelineData.gameDuration)}</span>
                   </div>
-                  
-                  <select
-                    value={playbackSpeed}
-                    onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
-                    className="px-3 py-1 bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded text-sm"
-                  >
-                    <option value={0.5}>0.5x</option>
-                    <option value={1}>1x</option>
-                    <option value={2}>2x</option>
-                    <option value={4}>4x</option>
-                  </select>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    ワード: {filteredWards.length} | オブジェクト: {currentObjectives.length}
+                  </div>
                 </div>
                 
                 <div className="relative">
@@ -496,10 +515,26 @@ export default function VisionLab() {
                     type="range"
                     min="0"
                     max={timelineData.gameDuration}
+                    step="30000" // 30 second steps
                     value={currentTime}
                     onChange={(e) => setCurrentTime(Number(e.target.value))}
                     className="w-full h-2 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer"
                   />
+                  
+                  {/* Objective markers on timeline */}
+                  {timelineData.objectiveEvents.map((obj, index) => {
+                    const position = (obj.timestamp / timelineData.gameDuration) * 100;
+                    return (
+                      <div
+                        key={index}
+                        className="absolute top-0 transform -translate-x-1/2 -translate-y-1"
+                        style={{ left: `${position}%` }}
+                        title={`${obj.monsterType || obj.buildingType} - ${formatTime(obj.timestamp)}`}
+                      >
+                        {getObjectiveIcon(obj.monsterType || obj.buildingType || '')}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -638,17 +673,43 @@ export default function VisionLab() {
                 </div>
               </div>
 
+              {/* Objectives Timeline */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md border border-gray-200 dark:border-gray-700">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center space-x-2">
+                  <Crown className="w-5 h-5 text-orange-500" />
+                  <span>オブジェクト</span>
+                </h3>
+                
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {currentObjectives.slice(-8).reverse().map((obj, index) => (
+                    <div key={index} className="flex items-center space-x-2 p-2 bg-gray-50 dark:bg-gray-700 rounded text-sm">
+                      <div className={`w-2 h-2 rounded-full ${obj.teamId === 100 ? 'bg-blue-500' : 'bg-red-500'}`} />
+                      <span className="text-gray-600 dark:text-gray-400">{formatTime(obj.timestamp)}</span>
+                      <span className="text-gray-900 dark:text-white">
+                        {obj.monsterType || obj.buildingType}
+                      </span>
+                      {getObjectiveIcon(obj.monsterType || obj.buildingType || '')}
+                    </div>
+                  ))}
+                  {currentObjectives.length === 0 && (
+                    <div className="text-center text-gray-500 py-4">
+                      まだオブジェクトイベントはありません
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Recent Events */}
               <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md border border-gray-200 dark:border-gray-700">
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center space-x-2">
-                  <Clock className="w-5 h-5 text-orange-500" />
-                  <span>最近のイベント</span>
+                  <Clock className="w-5 h-5 text-green-500" />
+                  <span>最近のワードイベント</span>
                 </h3>
                 
-                <div className="space-y-2 max-h-64 overflow-y-auto">
+                <div className="space-y-2 max-h-48 overflow-y-auto">
                   {timelineData.wardEvents
                     .filter(event => event.timestamp <= currentTime)
-                    .slice(-10)
+                    .slice(-8)
                     .reverse()
                     .map((event, index) => (
                       <div key={index} className="flex items-center space-x-2 p-2 bg-gray-50 dark:bg-gray-700 rounded text-sm">
@@ -676,7 +737,7 @@ export default function VisionLab() {
                 <h3 className="font-semibold text-purple-700 dark:text-purple-300">Vision Lab Pro へようこそ</h3>
                 <p className="text-purple-600 dark:text-purple-400 mt-1">
                   サモナー名を入力して試合を検索するか、デモデータで機能を体験してください。
-                  時間軸での視界変化、チーム視界の比較、リアルタイムマップ分析が可能です。
+                  時間軸での視界変化、チーム視界の比較、リアルタイムマップ分析、オブジェクトタイムラインが可能です。
                 </p>
               </div>
             </div>
