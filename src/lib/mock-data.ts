@@ -1,5 +1,25 @@
 import { SummonerData, MatchData, ParticipantData } from './riot-api';
 
+// Vision Lab用のインターフェース
+export interface WardPlacement {
+  x: number;
+  y: number;
+  type: 'stealth' | 'control' | 'farsight';
+  timestamp: number;
+  teamId: number;
+  isActive: boolean;
+}
+
+export interface VisionAnalysis {
+  totalWards: number;
+  wardTypes: Record<string, number>;
+  visionScore: number;
+  mapCoverage: number;
+  keyAreasCovered: string[];
+  suggestions: string[];
+  efficiency: number;
+}
+
 // モックサモナーデータ
 export const mockSummonerData: Record<string, SummonerData> = {
   'hide on bush': {
@@ -202,6 +222,100 @@ export const mockParticipantData: Record<string, ParticipantData[]> = {
     wardsPlaced: 16,
     wardsKilled: 7
   }]
+};
+
+// Vision Lab用モックデータ
+export const mockVisionData: Record<string, {
+  wards: WardPlacement[];
+  analysis: VisionAnalysis;
+}> = {
+  'excellent': {
+    wards: [
+      { x: 20, y: 18, type: 'control', timestamp: 180000, teamId: 100, isActive: true },
+      { x: 45, y: 35, type: 'stealth', timestamp: 240000, teamId: 100, isActive: true },
+      { x: 78, y: 75, type: 'stealth', timestamp: 300000, teamId: 100, isActive: true },
+      { x: 50, y: 20, type: 'control', timestamp: 360000, teamId: 100, isActive: true },
+      { x: 65, y: 40, type: 'farsight', timestamp: 420000, teamId: 100, isActive: true },
+      { x: 82, y: 65, type: 'stealth', timestamp: 480000, teamId: 100, isActive: true },
+      { x: 15, y: 28, type: 'stealth', timestamp: 540000, teamId: 100, isActive: true },
+      { x: 25, y: 50, type: 'control', timestamp: 600000, teamId: 100, isActive: true },
+      { x: 75, y: 30, type: 'stealth', timestamp: 660000, teamId: 100, isActive: true },
+    ],
+    analysis: {
+      totalWards: 9,
+      wardTypes: { stealth: 6, control: 3, farsight: 1 },
+      visionScore: 58,
+      mapCoverage: 85,
+      keyAreasCovered: ['Baron Pit', 'Dragon Pit', 'Mid River', 'Blue Jungle', 'Red Jungle'],
+      suggestions: [
+        '素晴らしいワード配置です！',
+        'バロンとドラゴン両方をカバーできています',
+        'ジャングルの主要ルートを監視できています'
+      ],
+      efficiency: 92
+    }
+  },
+  'good': {
+    wards: [
+      { x: 22, y: 18, type: 'control', timestamp: 180000, teamId: 100, isActive: true },
+      { x: 45, y: 35, type: 'stealth', timestamp: 240000, teamId: 100, isActive: true },
+      { x: 78, y: 75, type: 'stealth', timestamp: 300000, teamId: 100, isActive: true },
+      { x: 30, y: 50, type: 'control', timestamp: 360000, teamId: 100, isActive: false },
+      { x: 65, y: 40, type: 'farsight', timestamp: 420000, teamId: 100, isActive: true },
+      { x: 85, y: 65, type: 'stealth', timestamp: 480000, teamId: 100, isActive: true },
+      { x: 15, y: 28, type: 'stealth', timestamp: 540000, teamId: 100, isActive: true },
+    ],
+    analysis: {
+      totalWards: 7,
+      wardTypes: { stealth: 5, control: 2, farsight: 1 },
+      visionScore: 42,
+      mapCoverage: 68,
+      keyAreasCovered: ['Dragon Pit', 'Mid River', 'Blue Jungle'],
+      suggestions: [
+        'バロンピット周辺の視界が不足しています',
+        'トップサイドジャングルにもワードを配置することを推奨',
+        'コントロールワードの使用回数を増やしましょう',
+        '敵ジャングルへの侵入時の視界確保が重要です'
+      ],
+      efficiency: 75
+    }
+  },
+  'poor': {
+    wards: [
+      { x: 50, y: 50, type: 'stealth', timestamp: 300000, teamId: 100, isActive: true },
+      { x: 40, y: 40, type: 'stealth', timestamp: 420000, teamId: 100, isActive: false },
+      { x: 60, y: 60, type: 'stealth', timestamp: 540000, teamId: 100, isActive: true },
+      { x: 45, y: 55, type: 'control', timestamp: 600000, teamId: 100, isActive: false },
+    ],
+    analysis: {
+      totalWards: 4,
+      wardTypes: { stealth: 3, control: 1, farsight: 0 },
+      visionScore: 18,
+      mapCoverage: 25,
+      keyAreasCovered: ['Mid River'],
+      suggestions: [
+        'ワード配置が中央に集中しすぎています',
+        'バロンとドラゴンピットの視界確保が必要です',
+        'ジャングルエントリーポイントの監視が不足',
+        'コントロールワードをもっと活用しましょう',
+        'ファーサイトワードで安全な視界確保を',
+        'レーンの草むらにもワードを配置しましょう'
+      ],
+      efficiency: 35
+    }
+  }
+};
+
+// Vision Lab用ヘルパー関数
+export const getMockVisionData = (efficiency: 'excellent' | 'good' | 'poor' = 'good') => {
+  return mockVisionData[efficiency];
+};
+
+// ランダムな Vision Lab データを生成
+export const generateRandomVisionData = () => {
+  const efficiencyLevels: ('excellent' | 'good' | 'poor')[] = ['excellent', 'good', 'poor'];
+  const randomLevel = efficiencyLevels[Math.floor(Math.random() * efficiencyLevels.length)];
+  return getMockVisionData(randomLevel);
 };
 
 // モック試合データ
