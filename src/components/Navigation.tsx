@@ -23,14 +23,14 @@ const navigationItems = [
     href: '/vision-lab',
     icon: Eye,
     description: 'ワード配置分析',
-    inProgress: true
+    completed: true
   },
   {
     name: 'Objective Hub',
     href: '/objective-hub',
     icon: Target,
     description: 'オブジェクト取得分析',
-    comingSoon: true
+    inProgress: true
   },
   {
     name: 'Gold Trade Simulator',
