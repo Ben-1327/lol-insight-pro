@@ -65,43 +65,6 @@ export const mockSummonerData: Record<string, SummonerData> = {
     profileIconId: 4890,
     revisionDate: 1704000000000,
     summonerLevel: 450
-  },
-  // Account Overview用の追加アカウント
-  'challenger#kr': {
-    id: 'challenger-summoner-id-001',
-    accountId: 'challenger-account-id-001',
-    puuid: 'challenger-puuid-001',
-    name: 'ChallengerPlayer',
-    profileIconId: 4999,
-    revisionDate: 1704000000000,
-    summonerLevel: 500
-  },
-  'diamond#main': {
-    id: 'diamond-summoner-id-002',
-    accountId: 'diamond-account-id-002',
-    puuid: 'diamond-puuid-002',
-    name: 'DiamondPlayer',
-    profileIconId: 4850,
-    revisionDate: 1704000000000,
-    summonerLevel: 340
-  },
-  'goldplayer#jp1': {
-    id: 'gold-summoner-id-003',
-    accountId: 'gold-account-id-003',
-    puuid: 'gold-puuid-003',
-    name: 'GoldPlayer',
-    profileIconId: 4600,
-    revisionDate: 1704000000000,
-    summonerLevel: 180
-  },
-  'silverace#euw': {
-    id: 'silver-summoner-id-004',
-    accountId: 'silver-account-id-004',
-    puuid: 'silver-puuid-004',
-    name: 'SilverAce',
-    profileIconId: 4400,
-    revisionDate: 1704000000000,
-    summonerLevel: 120
   }
 };
 
@@ -149,72 +112,10 @@ export const mockMatchHistory: Record<string, string[]> = {
     'KR_7200456791',
     'KR_7200456792',
     'KR_7200456793'
-  ],
-  // Account Overview用の追加アカウント
-  'challenger-puuid-001': [
-    'KR_8000123456',
-    'KR_8000123457',
-    'KR_8000123458',
-    'KR_8000123459',
-    'KR_8000123460'
-  ],
-  'diamond-puuid-002': [
-    'KR_7500123456',
-    'KR_7500123457',
-    'KR_7500123458',
-    'KR_7500123459',
-    'KR_7500123460'
-  ],
-  'gold-puuid-003': [
-    'JP1_6000123456',
-    'JP1_6000123457',
-    'JP1_6000123458',
-    'JP1_6000123459',
-    'JP1_6000123460'
-  ],
-  'silver-puuid-004': [
-    'EUW1_5500123456',
-    'EUW1_5500123457',
-    'EUW1_5500123458',
-    'EUW1_5500123459',
-    'EUW1_5500123460'
   ]
 };
 
-// 新しいアカウント用のモック参加者データを追加
-const createMockParticipantData = (puuid: string, summonerId: string, summonerName: string, skillLevel: 'challenger' | 'diamond' | 'gold' | 'silver'): Record<string, ParticipantData[]> => {
-  const baseStats = {
-    challenger: { kda: 3.5, cs: 300, gold: 20000, damage: 35000 },
-    diamond: { kda: 2.8, cs: 280, gold: 18000, damage: 30000 },
-    gold: { kda: 2.2, cs: 220, gold: 15000, damage: 25000 },
-    silver: { kda: 1.8, cs: 180, gold: 12000, damage: 20000 }
-  };
-
-  const stats = baseStats[skillLevel];
-  const champions = ['Azir', 'LeBlanc', 'Yasuo', 'Syndra', 'Orianna'];
-
-  return {
-    [`${puuid.split('-')[0]}_${skillLevel.toUpperCase()}123456`]: [{
-      puuid,
-      summonerId,
-      summonerName,
-      championId: 134,
-      championName: champions[0],
-      kills: Math.floor(stats.kda * 3),
-      deaths: 3,
-      assists: Math.floor(stats.kda * 4),
-      totalMinionsKilled: Math.floor(stats.cs * 0.8),
-      neutralMinionsKilled: Math.floor(stats.cs * 0.2),
-      goldEarned: stats.gold,
-      totalDamageDealtToChampions: stats.damage,
-      visionScore: 35,
-      wardsPlaced: 18,
-      wardsKilled: 8
-    }]
-  };
-};
-
-// モック参加者データ（既存 + 新規）
+// モック参加者データ（既存のもののみ維持）
 export const mockParticipantData: Record<string, ParticipantData[]> = {
   'KR_7200123456': [{
     puuid: 'HsH2xmxhWa8wSgEuCsrMW9-D7Jg5fP3UlXv5jnQ9X8vH2pQ',
@@ -300,78 +201,6 @@ export const mockParticipantData: Record<string, ParticipantData[]> = {
     visionScore: 29,
     wardsPlaced: 16,
     wardsKilled: 7
-  }],
-  // Challenger レベル
-  'KR_8000123456': [{
-    puuid: 'challenger-puuid-001',
-    summonerId: 'challenger-summoner-id-001',
-    summonerName: 'ChallengerPlayer',
-    championId: 134,
-    championName: 'Syndra',
-    kills: 12,
-    deaths: 2,
-    assists: 15,
-    totalMinionsKilled: 320,
-    neutralMinionsKilled: 25,
-    goldEarned: 22000,
-    totalDamageDealtToChampions: 38000,
-    visionScore: 45,
-    wardsPlaced: 25,
-    wardsKilled: 12
-  }],
-  // Diamond レベル
-  'KR_7500123456': [{
-    puuid: 'diamond-puuid-002',
-    summonerId: 'diamond-summoner-id-002',
-    summonerName: 'DiamondPlayer',
-    championId: 103,
-    championName: 'Ahri',
-    kills: 8,
-    deaths: 3,
-    assists: 12,
-    totalMinionsKilled: 280,
-    neutralMinionsKilled: 20,
-    goldEarned: 18500,
-    totalDamageDealtToChampions: 31000,
-    visionScore: 38,
-    wardsPlaced: 20,
-    wardsKilled: 10
-  }],
-  // Gold レベル
-  'JP1_6000123456': [{
-    puuid: 'gold-puuid-003',
-    summonerId: 'gold-summoner-id-003',
-    summonerName: 'GoldPlayer',
-    championId: 157,
-    championName: 'Yasuo',
-    kills: 6,
-    deaths: 4,
-    assists: 8,
-    totalMinionsKilled: 220,
-    neutralMinionsKilled: 15,
-    goldEarned: 15200,
-    totalDamageDealtToChampions: 25500,
-    visionScore: 25,
-    wardsPlaced: 15,
-    wardsKilled: 7
-  }],
-  // Silver レベル
-  'EUW1_5500123456': [{
-    puuid: 'silver-puuid-004',
-    summonerId: 'silver-summoner-id-004',
-    summonerName: 'SilverAce',
-    championId: 91,
-    championName: 'Talon',
-    kills: 4,
-    deaths: 5,
-    assists: 6,
-    totalMinionsKilled: 180,
-    neutralMinionsKilled: 10,
-    goldEarned: 12800,
-    totalDamageDealtToChampions: 21000,
-    visionScore: 18,
-    wardsPlaced: 12,
-    wardsKilled: 5
   }]
 };
 

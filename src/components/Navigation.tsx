@@ -19,18 +19,11 @@ const navigationItems = [
     completed: true
   },
   {
-    name: 'Account Overview',
-    href: '/account-overview',
-    icon: Users,
-    description: '複数アカウント比較',
-    inProgress: true
-  },
-  {
     name: 'Vision Lab',
     href: '/vision-lab',
     icon: Eye,
     description: 'ワード配置分析',
-    comingSoon: true
+    inProgress: true
   },
   {
     name: 'Objective Hub',
