@@ -1,0 +1,139 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("POSTGRES_PRISMA_URL")
+}
+
+// ユーザーテーブル
+model User {
+  id           String    @id @default(cuid())
+  username     String    @unique
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  
+  accounts     Account[]
+
+  @@map("users")
+}
+
+// LoLアカウントテーブル
+model Account {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  summonerId  String   @map("summoner_id")
+  region      String
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  user        User     @relation(fields: [userId], references: [id])
+  matches     Match[]
+
+  @@map("accounts")
+}
+
+// 試合テーブル
+model Match {
+  id           String   @id // Riot matchId
+  accountId    String   @map("account_id")
+  playedAt     DateTime @map("played_at")
+  gameDuration Int      @map("game_duration")
+  
+  account           Account           @relation(fields: [accountId], references: [id])
+  wardEvents        WardEvent[]
+  objectiveEvents   ObjectiveEvent[]
+  basicMetric       BasicMetric?
+  goldSimulations   GoldSimulation[]
+  aiReports         AIReport[]
+
+  @@map("matches")
+}
+
+// ワードイベントテーブル
+model WardEvent {
+  id        String    @id @default(cuid())
+  matchId   String    @map("match_id")
+  eventTime Int       @map("event_time") // 秒
+  x         Int
+  y         Int
+  type      WardType
+  
+  match     Match     @relation(fields: [matchId], references: [id])
+
+  @@map("ward_events")
+}
+
+// オブジェクトイベントテーブル
+model ObjectiveEvent {
+  id        String        @id @default(cuid())
+  matchId   String        @map("match_id")
+  eventTime Int           @map("event_time")
+  type      ObjectiveType
+  
+  match     Match         @relation(fields: [matchId], references: [id])
+
+  @@map("objective_events")
+}
+
+// 基本メトリクステーブル
+model BasicMetric {
+  matchId      String @id @map("match_id")
+  kda          Float
+  csPerMin     Float  @map("cs_per_min")
+  goldPerMin   Float  @map("gold_per_min")
+  damagePerMin Float  @map("damage_per_min")
+  
+  match        Match  @relation(fields: [matchId], references: [id])
+
+  @@map("basic_metrics")
+}
+
+// ゴールドシミュレーションテーブル
+model GoldSimulation {
+  id           String @id @default(cuid())
+  matchId      String @map("match_id")
+  scenario     String
+  goldPerMin   Float  @map("gold_per_min")
+  csLost       Int    @map("cs_lost")
+  
+  match        Match  @relation(fields: [matchId], references: [id])
+
+  @@map("gold_simulations")
+}
+
+// AIレポートテーブル
+model AIReport {
+  id          String   @id @default(cuid())
+  matchId     String   @map("match_id")
+  reportUrl   String   @map("report_url")
+  generatedAt DateTime @default(now()) @map("generated_at")
+  
+  match       Match    @relation(fields: [matchId], references: [id])
+
+  @@map("ai_reports")
+}
+
+// Enums
+enum WardType {
+  PLACED
+  KILLED
+
+  @@map("ward_type")
+}
+
+enum ObjectiveType {
+  DRAGON
+  BARON
+
+  @@map("objective_type")
+}
